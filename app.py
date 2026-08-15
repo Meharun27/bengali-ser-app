@@ -1,30 +1,37 @@
 import os
 import shutil
 import uuid
+import zipfile
+import gdown
 import streamlit as st
 import pandas as pd
 from natsort import natsorted
-import gdown
 
 st.set_page_config(page_title="Bengali SER Annotation Portal", layout="wide", initial_sidebar_state="expanded")
 
 AUDIO_DIR = "dynamic_sentences"
 VOTE_DIR = "vote_results"
 CSV_PATH = os.path.join(VOTE_DIR, "votes.csv")
+ZIP_PATH = "dataset.zip"
 
-# Automatically download the folder from Google Drive
+# Automatically download and extract the ZIP file from Google Drive
 if not os.path.exists(AUDIO_DIR) or not os.listdir(AUDIO_DIR):
-    with st.spinner("Downloading audio dataset from Google Drive folder... Please wait."):
+    with st.spinner("Downloading audio dataset from Google Drive... Please wait."):
         os.makedirs(AUDIO_DIR, exist_ok=True)
         
-        folder_url = "https://drive.google.com/drive/folders/1OAxT4lQQ_i3mw2mpBv-EeBUIMq_ij-22"
+        file_id = "1960mAD2mcttd6AnewS4U7E7Lwm2AWTrh"
+        url = f"https://drive.google.com/uc?id={file_id}"
         
         try:
-            gdown.download_folder(folder_url, output=AUDIO_DIR, quiet=False, use_cookies=False)
+            gdown.download(url, ZIP_PATH, quiet=False)
+            with zipfile.ZipFile(ZIP_PATH, 'r') as zip_ref:
+                zip_ref.extractall(AUDIO_DIR)
+            if os.path.exists(ZIP_PATH):
+                os.remove(ZIP_PATH)
         except Exception as e:
-            st.error(f"Error downloading folder from Google Drive: {e}")
+            st.error(f"Error downloading or extracting zip file: {e}")
 
-# Handle nested folder structure if gdown created a subfolder
+# Handle nested folder structure if the zip extracted into a subfolder
 if os.path.exists(AUDIO_DIR):
     subdirs = [os.path.join(AUDIO_DIR, d) for d in os.listdir(AUDIO_DIR) if os.path.isdir(os.path.join(AUDIO_DIR, d))]
     if len(subdirs) == 1 and not [f for f in os.listdir(AUDIO_DIR) if f.endswith(".wav")]:
@@ -51,7 +58,7 @@ except FileNotFoundError:
     audio_files = []
 
 if not audio_files:
-    st.warning(f"No audio files found in directory: `{AUDIO_DIR}`. Please verify that your Google Drive folder is set to **'Anyone with the link can view'**.")
+    st.warning(f"No audio files found in directory: `{AUDIO_DIR}`. Please verify that your Google Drive zip file is set to **'Anyone with the link can view'**.")
     st.stop()
 
 CSV_COLUMNS = ["file", "user", "voter_id", "emotion", "intensity", "gender", "noise", "age", "code_switching"]
@@ -194,4 +201,3 @@ with col2:
                 st.success(f"Vote saved successfully for `{selected_file}`!")
                 st.session_state.batch_index += 1
                 st.rerun()
-                
