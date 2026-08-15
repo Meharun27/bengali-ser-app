@@ -1,10 +1,10 @@
 import os
 import shutil
 import uuid
-import gdown
 import streamlit as st
 import pandas as pd
 from natsort import natsorted
+import gdown
 
 st.set_page_config(page_title="Bengali SER Annotation Portal", layout="wide", initial_sidebar_state="expanded")
 
@@ -14,15 +14,17 @@ CSV_PATH = os.path.join(VOTE_DIR, "votes.csv")
 
 # Automatically download the folder from Google Drive
 if not os.path.exists(AUDIO_DIR) or not os.listdir(AUDIO_DIR):
-    with st.spinner("Downloading audio dataset folder from Google Drive... Please wait."):
+    with st.spinner("Downloading audio dataset from Google Drive folder... Please wait."):
         os.makedirs(AUDIO_DIR, exist_ok=True)
-        folder_url = "https://drive.google.com/drive/folders/1OAxT4lQQ_i3mw2mpBv-EeBUIMq_ij-22?usp=sharing"
+        
+        folder_url = "https://drive.google.com/drive/folders/1OAxT4lQQ_i3mw2mpBv-EeBUIMq_ij-22"
+        
         try:
-            gdown.download_folder(url=folder_url, output=AUDIO_DIR, quiet=False, remaining_ok=True)
+            gdown.download_folder(folder_url, output=AUDIO_DIR, quiet=False, use_cookies=False)
         except Exception as e:
-            st.error(f"Error downloading folder: {e}")
+            st.error(f"Error downloading folder from Google Drive: {e}")
 
-# Handle nested folder structure if gdown creates a subfolder
+# Handle nested folder structure if gdown created a subfolder
 if os.path.exists(AUDIO_DIR):
     subdirs = [os.path.join(AUDIO_DIR, d) for d in os.listdir(AUDIO_DIR) if os.path.isdir(os.path.join(AUDIO_DIR, d))]
     if len(subdirs) == 1 and not [f for f in os.listdir(AUDIO_DIR) if f.endswith(".wav")]:
