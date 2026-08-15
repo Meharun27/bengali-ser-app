@@ -14,16 +14,16 @@ VOTE_DIR = "vote_results"
 CSV_PATH = os.path.join(VOTE_DIR, "votes.csv")
 ZIP_PATH = "dataset.zip"
 
-# Automatically download and extract the ZIP file from Google Drive
-if not os.path.exists(AUDIO_DIR) or not os.listdir(AUDIO_DIR):
+# Automatically download and extract the ZIP file from Google Drive (bypassing virus warnings)
+if not os.path.exists(AUDIO_DIR) or not os.listdir(AUDIO_DIR) or not any(f.endswith(".wav") for f in os.listdir(AUDIO_DIR)):
     with st.spinner("Downloading audio dataset from Google Drive... Please wait."):
         os.makedirs(AUDIO_DIR, exist_ok=True)
-        
         file_id = "1960mAD2mcttd6AnewS4U7E7Lwm2AWTrh"
-        url = f"https://drive.google.com/uc?id={file_id}"
         
         try:
-            gdown.download(url, ZIP_PATH, quiet=False)
+            # Using gdown's ID parameter handles large files and virus warning confirmations automatically
+            gdown.download(id=file_id, output=ZIP_PATH, quiet=False)
+            
             with zipfile.ZipFile(ZIP_PATH, 'r') as zip_ref:
                 zip_ref.extractall(AUDIO_DIR)
             if os.path.exists(ZIP_PATH):
@@ -31,14 +31,23 @@ if not os.path.exists(AUDIO_DIR) or not os.listdir(AUDIO_DIR):
         except Exception as e:
             st.error(f"Error downloading or extracting zip file: {e}")
 
-# Handle nested folder structure if the zip extracted into a subfolder
+# Flatten any nested folder structures so all .wav files sit directly in AUDIO_DIR
 if os.path.exists(AUDIO_DIR):
-    subdirs = [os.path.join(AUDIO_DIR, d) for d in os.listdir(AUDIO_DIR) if os.path.isdir(os.path.join(AUDIO_DIR, d))]
-    if len(subdirs) == 1 and not [f for f in os.listdir(AUDIO_DIR) if f.endswith(".wav")]:
-        sub_path = subdirs[0]
-        for f in os.listdir(sub_path):
-            shutil.move(os.path.join(sub_path, f), AUDIO_DIR)
-        os.rmdir(sub_path)
+    for root, dirs, files in os.walk(AUDIO_DIR, topdown=False):
+        for file in files:
+            if file.lower().endswith(".wav") and not file.startswith("._"):
+                src_file = os.path.join(root, file)
+                dst_file = os.path.join(AUDIO_DIR, file)
+                if src_file != dst_file:
+                    if not os.path.exists(dst_file):
+                        shutil.move(src_file, dst_file)
+        for d in dirs:
+            dir_path = os.path.join(root, d)
+            try:
+                if not os.listdir(dir_path):
+                    os.rmdir(dir_path)
+            except Exception:
+                pass
 
 st.title("🎙️ Bengali Speech Emotion Recognition (SER) Annotation Portal")
 st.markdown("Evaluate audio clips with batching, multi-annotator tracking, attribute tagging, and majority-consensus routing.")
