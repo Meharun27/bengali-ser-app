@@ -12,12 +12,24 @@ AUDIO_DIR = "dynamic_sentences"
 VOTE_DIR = "vote_results"
 CSV_PATH = os.path.join(VOTE_DIR, "votes.csv")
 
-# Automatically download audio folder from Google Drive if it doesn't exist or is empty
+# Automatically download the folder from Google Drive
 if not os.path.exists(AUDIO_DIR) or not os.listdir(AUDIO_DIR):
-    with st.spinner("Downloading audio dataset from Google Drive... Please wait (this only happens once on boot)."):
-        folder_id = "1OAxT4lQQ_i3mw2mpBv-EeBUIMq_ij-22"
+    with st.spinner("Downloading audio dataset folder from Google Drive... Please wait."):
         os.makedirs(AUDIO_DIR, exist_ok=True)
-        gdown.download_folder(id=folder_id, output=AUDIO_DIR, quiet=False, remaining_ok=True)
+        folder_url = "https://drive.google.com/drive/folders/1OAxT4lQQ_i3mw2mpBv-EeBUIMq_ij-22?usp=sharing"
+        try:
+            gdown.download_folder(url=folder_url, output=AUDIO_DIR, quiet=False, remaining_ok=True)
+        except Exception as e:
+            st.error(f"Error downloading folder: {e}")
+
+# Handle nested folder structure if gdown creates a subfolder
+if os.path.exists(AUDIO_DIR):
+    subdirs = [os.path.join(AUDIO_DIR, d) for d in os.listdir(AUDIO_DIR) if os.path.isdir(os.path.join(AUDIO_DIR, d))]
+    if len(subdirs) == 1 and not [f for f in os.listdir(AUDIO_DIR) if f.endswith(".wav")]:
+        sub_path = subdirs[0]
+        for f in os.listdir(sub_path):
+            shutil.move(os.path.join(sub_path, f), AUDIO_DIR)
+        os.rmdir(sub_path)
 
 st.title("🎙️ Bengali Speech Emotion Recognition (SER) Annotation Portal")
 st.markdown("Evaluate audio clips with batching, multi-annotator tracking, attribute tagging, and majority-consensus routing.")
@@ -37,7 +49,7 @@ except FileNotFoundError:
     audio_files = []
 
 if not audio_files:
-    st.warning(f"No audio files found in directory: `{AUDIO_DIR}`. Please verify your Google Drive sharing link settings are set to 'Anyone with the link can view'.")
+    st.warning(f"No audio files found in directory: `{AUDIO_DIR}`. Please verify that your Google Drive folder is set to **'Anyone with the link can view'**.")
     st.stop()
 
 CSV_COLUMNS = ["file", "user", "voter_id", "emotion", "intensity", "gender", "noise", "age", "code_switching"]
@@ -180,3 +192,4 @@ with col2:
                 st.success(f"Vote saved successfully for `{selected_file}`!")
                 st.session_state.batch_index += 1
                 st.rerun()
+                
