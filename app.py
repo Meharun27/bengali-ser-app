@@ -1,41 +1,45 @@
 import os
 import shutil
 import uuid
+import gdown
 import streamlit as st
 import pandas as pd
 from natsort import natsorted
 
 st.set_page_config(page_title="Bengali SER Annotation Portal", layout="wide", initial_sidebar_state="expanded")
 
+AUDIO_DIR = "dynamic_sentences"
+VOTE_DIR = "vote_results"
+CSV_PATH = os.path.join(VOTE_DIR, "votes.csv")
+
+# Automatically download audio folder from Google Drive if it doesn't exist or is empty
+if not os.path.exists(AUDIO_DIR) or not os.listdir(AUDIO_DIR):
+    with st.spinner("Downloading audio dataset from Google Drive... Please wait (this only happens once on boot)."):
+        folder_id = "1OAxT4lQQ_i3mw2mpBv-EeBUIMq_ij-22"
+        os.makedirs(AUDIO_DIR, exist_ok=True)
+        gdown.download_folder(id=folder_id, output=AUDIO_DIR, quiet=False, remaining_ok=True)
+
 st.title("🎙️ Bengali Speech Emotion Recognition (SER) Annotation Portal")
 st.markdown("Evaluate audio clips with batching, multi-annotator tracking, attribute tagging, and majority-consensus routing.")
 
-# ========== CONFIG (Input Path & Output Directory on External Drive) ========== #
-AUDIO_DIR = "/Volumes/meherun 1/v/dynamic_sentences"
-VOTE_DIR = "/Volumes/meherun 1/v/vote_results"
-CSV_PATH = os.path.join(VOTE_DIR, "votes.csv")
-
-BATCH_SIZE = 10     # clips per user session batch
-REQUIRED_VOTES = 3  # move clip after this many total votes reached
+BATCH_SIZE = 10     
+REQUIRED_VOTES = 3  
 
 emotions = ["Happy", "Sad", "Angry", "Neutral", "Mixed"]
 
-# Ensure output and emotion subdirectories exist inside vote_results
 for emo in emotions:
     os.makedirs(os.path.join(VOTE_DIR, emo), exist_ok=True)
 os.makedirs(VOTE_DIR, exist_ok=True)
 
-# ========== LOAD AUDIO FILES ========== #
 try:
     audio_files = natsorted([f for f in os.listdir(AUDIO_DIR) if f.lower().endswith(".wav") and not f.startswith("._")])
 except FileNotFoundError:
     audio_files = []
 
 if not audio_files:
-    st.warning(f"No audio files found in directory: `{AUDIO_DIR}`. Please check if the external drive is connected.")
+    st.warning(f"No audio files found in directory: `{AUDIO_DIR}`. Please verify your Google Drive sharing link settings are set to 'Anyone with the link can view'.")
     st.stop()
 
-# ========== LOAD VOTES DATA ========== #
 CSV_COLUMNS = ["file", "user", "voter_id", "emotion", "intensity", "gender", "noise", "age", "code_switching"]
 
 if os.path.exists(CSV_PATH):
@@ -50,11 +54,9 @@ if os.path.exists(CSV_PATH):
 else:
     votes_df = pd.DataFrame(columns=CSV_COLUMNS)
 
-# ========== SIDEBAR SETUP (Annotator Name & Dynamic Auto Voter ID) ========== #
 st.sidebar.header("👤 Annotator Session")
 username = st.sidebar.text_input("Annotator Name", value="", placeholder="Enter your full name")
 
-# Automatically generate a new unique Voter ID whenever the username changes
 if 'current_annotator' not in st.session_state or st.session_state.current_annotator != username:
     st.session_state.current_annotator = username
     if username.strip():
@@ -64,11 +66,16 @@ if 'current_annotator' not in st.session_state or st.session_state.current_annot
 
 voter_id = st.sidebar.text_input("Auto Voter ID", value=st.session_state.voter_id, disabled=True)
 
+if os.path.exists(CSV_PATH) and os.path.getsize(CSV_PATH) > 0:
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("📥 Download Results")
+    with open(CSV_PATH, "rb") as f:
+        st.sidebar.download_button("Download votes.csv", f, file_name="votes.csv", mime="text/csv")
+
 if not username.strip():
     st.warning("⚠️ Please enter your name in the sidebar to start voting.")
     st.stop()
 
-# Filter batch for this user based on unvoted/needed criteria
 def get_user_batch(user):
     already_voted = set(votes_df.loc[votes_df["user"] == user, "file"]) if not votes_df.empty and "user" in votes_df.columns else set()
     needs_votes = []
@@ -99,7 +106,6 @@ if st.sidebar.button("🔄 Refresh / Load New Batch"):
     st.session_state.batch_index = 0
     st.rerun()
 
-# ========== MAIN VOTING INTERFACE ========== #
 if batch_index >= len(batch_files):
     st.success("🎉 You have completed your current batch of files! Click 'Refresh / Load New Batch' in the sidebar to fetch more clips.")
     st.stop()
